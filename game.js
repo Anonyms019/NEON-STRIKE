@@ -1,8 +1,21 @@
 let scene, camera, renderer;
-let player = { speed: 0.15, hp: 100 };
+let player = {
+    speed: 0.15,
+    dashSpeed: 0.8,
+    hp: 100,
+    canDash: true,
+    dashCooldown: 1000
+};
+
 let keys = {};
 let enemies = [];
 let score = 0;
+
+let yaw = 0;
+let pitch = 0;
+
+let recoil = 0;
+let recoilRecovery = 0.02;
 
 init();
 animate();
@@ -37,7 +50,16 @@ function init() {
     document.addEventListener("keyup", e => keys[e.code] = false);
     document.addEventListener("click", shoot);
 
+    document.addEventListener("mousemove", onMouseMove);
+
     document.body.requestPointerLock();
+}
+
+function onMouseMove(event) {
+    yaw -= event.movementX * 0.002;
+    pitch -= event.movementY * 0.002;
+
+    pitch = Math.max(-Math.PI/2, Math.min(Math.PI/2, pitch));
 }
 
 function spawnEnemy() {
@@ -45,23 +67,52 @@ function spawnEnemy() {
         new THREE.BoxGeometry(1, 1, 1),
         new THREE.MeshBasicMaterial({ color: 0xff0055 })
     );
+
     enemy.position.set(
         (Math.random() - 0.5) * 20,
         0.5,
         (Math.random() - 0.5) * 20
     );
+
     scene.add(enemy);
     enemies.push(enemy);
 }
 
 function movePlayer() {
-    if (keys["KeyW"]) camera.position.z -= player.speed;
-    if (keys["KeyS"]) camera.position.z += player.speed;
-    if (keys["KeyA"]) camera.position.x -= player.speed;
-    if (keys["KeyD"]) camera.position.x += player.speed;
+    let direction = new THREE.Vector3();
+
+    if (keys["KeyW"]) direction.z -= 1;
+    if (keys["KeyS"]) direction.z += 1;
+    if (keys["KeyA"]) direction.x -= 1;
+    if (keys["KeyD"]) direction.x += 1;
+
+    direction.normalize();
+
+    const moveSpeed = player.speed;
+    direction.applyAxisAngle(new THREE.Vector3(0,1,0), yaw);
+
+    camera.position.addScaledVector(direction, moveSpeed);
+
+    // DASH
+    if (keys["ShiftLeft"] && player.canDash) {
+        dash(direction);
+    }
+}
+
+function dash(direction) {
+    player.canDash = false;
+
+    camera.position.addScaledVector(direction, player.dashSpeed);
+
+    setTimeout(() => {
+        player.canDash = true;
+    }, player.dashCooldown);
 }
 
 function shoot() {
+    // aplica recoil
+    recoil += 0.08;
+
     const raycaster = new THREE.Raycaster();
     raycaster.setFromCamera(new THREE.Vector2(0,0), camera);
     const intersects = raycaster.intersectObjects(enemies);
@@ -81,9 +132,18 @@ function animate() {
 
     movePlayer();
 
+    // aplica recoil e recuperação
+    if (recoil > 0) {
+        recoil -= recoilRecovery;
+    }
+
+    camera.rotation.order = "YXZ";
+    camera.rotation.y = yaw;
+    camera.rotation.x = pitch - recoil;
+
     enemies.forEach(enemy => {
         enemy.lookAt(camera.position);
-        enemy.position.z += 0.01;
+        enemy.position.lerp(camera.position, 0.001);
     });
 
     renderer.render(scene, camera);
