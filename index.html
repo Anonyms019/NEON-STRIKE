@@ -15,6 +15,26 @@
 
 <script src="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.min.js"></script>
 <script src="game.js"></script>
-
+// ====================== HUD ADMIN ======================
+const adminHUD = document.createElement("div");
+adminHUD.style.position = "absolute";
+adminHUD.style.top = "10px";
+adminHUD.style.right = "10px";
+adminHUD.style.padding = "10px";
+adminHUD.style.backgroundColor = "rgba(0,0,0,0.6)";
+adminHUD.style.color = "#00ffff";
+adminHUD.style.fontFamily = "monospace";
+adminHUD.style.fontSize = "14px";
+adminHUD.style.border = "1px solid #00ffff";
+adminHUD.style.borderRadius = "5px";
+adminHUD.style.display = "none"; // inicialmente oculto
+adminHUD.innerHTML = `
+<b>ADMIN MENU</b><br>
+1️⃣ Cura Player<br>
+2️⃣ Mata Bot<br>
+3️⃣ Spawn Granada<br>
+4️⃣ Teleporte
+`;
+document.body.appendChild(adminHUD);
 </body>
 </html>
