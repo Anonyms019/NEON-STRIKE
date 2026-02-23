@@ -80,18 +80,19 @@ function init() {
     document.addEventListener("mousemove", onMouseMove);
     document.addEventListener("click", playerShoot);
 
-    // Fullscreen
-    document.addEventListener("keydown", e => {
-        if (e.code === "KeyF") {
-            if (!document.fullscreenElement) document.body.requestFullscreen();
+    // Fullscreen Toggle
+document.addEventListener("keydown", e => {
+    if (e.code === "KeyF") {
+        if (!document.fullscreenElement) {
+            document.body.requestFullscreen();
+        } else {
+            document.exitFullscreen();
         }
-        if (e.code === "Escape") {
-            if (document.fullscreenElement) document.exitFullscreen();
-        }
-    });
-
-    document.body.requestPointerLock();
-}
+    }
+    if (e.code === "Escape" && document.fullscreenElement) {
+        document.exitFullscreen();
+    }
+});
 
 // ====================== ARENA ======================
 function createArena() {
@@ -177,7 +178,14 @@ function createBot() {
     group.position.set(15, 1, 15);
     scene.add(group);
     bot.mesh = group;
+    // Ajustando a rotação da arma do bot para garantir que fique na direção certa
+    const gun = new THREE.Mesh(new THREE.BoxGeometry(0.15, 0.1, 0.5), gunMat);
+    gun.position.set(0.5, 0.6, 0); // posicionar à frente/direita do corpo
+    gun.rotation.y = Math.PI / 4; // A rotação foi ajustada para ficar na direção correta
+    group.add(gun);
+    bot.gun = gun;
 }
+    
 
 // ====================== CONTROLES ======================
 function onMouseMove(e) {
