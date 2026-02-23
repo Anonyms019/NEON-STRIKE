@@ -1,3 +1,5 @@
+let audioListener;
+let covers = [];
 let scene, camera, renderer;
 let clock = new THREE.Clock();
 
@@ -29,6 +31,8 @@ let yaw = 0;
 let pitch = 0;
 
 init();
+audioListener = new THREE.AudioListener();
+camera.add(audioListener);
 animate();
 
 function init() {
@@ -59,29 +63,110 @@ function init() {
 }
 
 function createArena(){
+
+    // Chão
     const floor = new THREE.Mesh(
-        new THREE.PlaneGeometry(60,60),
-        new THREE.MeshStandardMaterial({color:0x111122})
+        new THREE.PlaneGeometry(100,100),
+        new THREE.MeshStandardMaterial({color:0x1a1a2e})
     );
     floor.rotation.x = -Math.PI/2;
     scene.add(floor);
+
+    // Muros
+    const wallMaterial = new THREE.MeshStandardMaterial({color:0x16213e});
+    for(let i=0;i<4;i++){
+        const wall = new THREE.Mesh(
+            new THREE.BoxGeometry(100,10,2),
+            wallMaterial
+        );
+
+        if(i===0) wall.position.set(0,5,-50);
+        if(i===1) wall.position.set(0,5,50);
+        if(i===2){
+            wall.geometry = new THREE.BoxGeometry(2,10,100);
+            wall.position.set(-50,5,0);
+        }
+        if(i===3){
+            wall.geometry = new THREE.BoxGeometry(2,10,100);
+            wall.position.set(50,5,0);
+        }
+
+        scene.add(wall);
+    }
+
+    // Prédios aleatórios
+    for(let i=0;i<20;i++){
+
+    const height = Math.random()*15+5;
+
+    const building = new THREE.Mesh(
+        new THREE.BoxGeometry(3,height,3),
+        new THREE.MeshStandardMaterial({color:0x0f3460})
+    );
+
+    building.position.set(
+        (Math.random()-0.5)*80,
+        height/2,
+        (Math.random()-0.5)*80
+    );
+
+    scene.add(building);
+    covers.push(building);
+}
+
+    // Luz ambiente
+    const ambient = new THREE.AmbientLight(0x404040);
+    scene.add(ambient);
 }
 
 function createPlayer(){
+
+    const group = new THREE.Group();
+
     const body = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.5,1.2,4,8),
+        new THREE.CylinderGeometry(0.5,0.5,1.5,16),
         new THREE.MeshStandardMaterial({color:0x00ffff})
     );
-    body.position.y = 1;
-    scene.add(body);
-    player.mesh = body;
-}
 
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4,16,16),
+        new THREE.MeshStandardMaterial({color:0xffffff})
+    );
+
+    head.position.y = 1.2;
+
+    group.add(body);
+    group.add(head);
+
+    group.position.y = 1;
+
+    scene.add(group);
+    player.mesh = group;
+}
 function createBot(){
+
+    const group = new THREE.Group();
+
     const body = new THREE.Mesh(
-        new THREE.CapsuleGeometry(0.5,1.2,4,8),
+        new THREE.CylinderGeometry(0.5,0.5,1.5,16),
         new THREE.MeshStandardMaterial({color:0xff0044})
     );
+
+    const head = new THREE.Mesh(
+        new THREE.SphereGeometry(0.4,16,16),
+        new THREE.MeshStandardMaterial({color:0xffaaaa})
+    );
+
+    head.position.y = 1.2;
+
+    group.add(body);
+    group.add(head);
+
+    group.position.set(15,1,15);
+
+    scene.add(group);
+    bot.mesh = group;
+}
     body.position.set(10,1,10);
     scene.add(body);
     bot.mesh = body;
@@ -114,6 +199,9 @@ function movePlayer(){
     camera.rotation.x = pitch;
 
     if(keys["KeyG"]) throwGrenade();
+    if(player.alive){
+    walkTime += 0.1;
+    player.mesh.rotation.z = Math.sin(walkTime) * 0.05;
 }
 
 function playerShoot(){
@@ -127,19 +215,36 @@ function botShoot(){
         .subVectors(player.mesh.position, bot.mesh.position)
         .normalize();
     createBullet(bot.mesh.position.clone(), direction,"bot");
-}
+bot.mesh.rotation.x = -0.2;
+setTimeout(()=>{
+    bot.mesh.rotation.x = 0;
+        },150);
 
 function createBullet(position, direction, owner){
+
     const bullet = new THREE.Mesh(
         new THREE.SphereGeometry(0.1,8,8),
         new THREE.MeshBasicMaterial({color: owner==="player"?0x00ffff:0xff0000})
     );
+
     bullet.position.copy(position);
     bullet.userData={direction, owner};
+
+    // Som 3D
+    const sound = new THREE.PositionalAudio(audioListener);
+    const audioLoader = new THREE.AudioLoader();
+
+    audioLoader.load('https://threejs.org/examples/sounds/358232_j_s_song.ogg', function(buffer){
+        sound.setBuffer(buffer);
+        sound.setRefDistance(5);
+        sound.play();
+    });
+
+    bullet.add(sound);
+
     scene.add(bullet);
     bullets.push(bullet);
 }
-
 function throwGrenade(){
     if(!player.alive) return;
 
@@ -173,14 +278,48 @@ function updateGrenades(delta){
 }
 
 function explode(position){
-    const radius=4;
 
+    const radius = 4;
+
+    // Dano
     if(bot.mesh.position.distanceTo(position)<radius && bot.alive){
         bot.hp-=50;
     }
     if(player.mesh.position.distanceTo(position)<radius && player.alive){
         player.hp-=50;
     }
+
+    // Esfera de explosão
+    const explosion = new THREE.Mesh(
+        new THREE.SphereGeometry(0.5,16,16),
+        new THREE.MeshBasicMaterial({color:0xffaa00, transparent:true, opacity:0.8})
+    );
+
+    explosion.position.copy(position);
+    scene.add(explosion);
+
+    // Luz flash
+    const light = new THREE.PointLight(0xffaa00,5,10);
+    light.position.copy(position);
+    scene.add(light);
+
+    let scale = 1;
+    let opacity = 0.8;
+
+    const interval = setInterval(()=>{
+        scale += 0.5;
+        opacity -= 0.05;
+
+        explosion.scale.set(scale,scale,scale);
+        explosion.material.opacity = opacity;
+
+        if(opacity<=0){
+            clearInterval(interval);
+            scene.remove(explosion);
+            scene.remove(light);
+        }
+
+    },16);
 }
 
 function updateBullets(delta){
@@ -204,21 +343,47 @@ function updateBullets(delta){
 }
 
 function updateBot(delta){
+
     if(!bot.alive) return;
 
+    let distance = bot.mesh.position.distanceTo(player.mesh.position);
+
+    let targetPosition = player.mesh.position.clone();
+
+    // Se vida baixa ou muito perto → usar cover
+    if(bot.hp < 40 || distance < 8){
+
+        let closestCover = null;
+        let minDist = Infinity;
+
+        covers.forEach(cover=>{
+            let d = bot.mesh.position.distanceTo(cover.position);
+            if(d < minDist){
+                minDist = d;
+                closestCover = cover;
+            }
+        });
+
+        if(closestCover){
+            targetPosition = closestCover.position.clone();
+        }
+    }
+
     let dir = new THREE.Vector3()
-        .subVectors(player.mesh.position, bot.mesh.position)
+        .subVectors(targetPosition, bot.mesh.position)
         .normalize();
 
     bot.mesh.position.addScaledVector(dir, bot.speed);
 
-    bot.shootCooldown -= delta;
-    if(bot.shootCooldown<=0){
-        botShoot();
-        bot.shootCooldown=1;
+    // Atirar apenas se ver o player
+    if(distance < 25){
+        bot.shootCooldown -= delta;
+        if(bot.shootCooldown<=0){
+            botShoot();
+            bot.shootCooldown=1.5;
+        }
     }
 }
-
 function checkDeaths(delta){
     if(player.hp<=0 && player.alive){
         player.alive=false;
@@ -269,7 +434,7 @@ function getForwardVector(){
     v.applyQuaternion(camera.quaternion);
     return v.normalize();
 }
-
+let walkTime = 0;
 function animate(){
     requestAnimationFrame(animate);
     let delta=clock.getDelta();
